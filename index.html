@@ -1153,56 +1153,58 @@ function getTextFromI18n(el, langCode) {
 function copyHistory() {
   const prefixEn = 'The store reported an access issue. Troubleshooting performed:';
   const prefixIt = 'Lo store segnala problemi di accesso. Troubleshooting effettuato:';
+
   const choiceByStep = {};
   clickTrail.forEach(c => { if (c.stepId) choiceByStep[c.stepId] = c; });
-  const SKIP_STEPS = new Set(['langSelect','step1']);
+  const SKIP_STEPS = new Set(['langSelect', 'step1']);
 
-  // Exclusion for step1B bullets
-  const EXCLUDE_IT = new Set(['M.F. non fiscale','DGFE - Errore di identificazione','Periodo inattivo, effettuare chiusura']);
-  const EXCLUDE_EN = new Set(['Non-fiscal M.F.','DGFE - Identification error','Inactive period, perform closure']);
-  const shouldKeepLine = (stepId, langCode, text) => {
-    if (stepId !== 'step1B') return true;
-    const trimmed = String(text||'').trim();
-    return langCode === 'en' ? !EXCLUDE_EN.has(trimmed) : !EXCLUDE_IT.has(trimmed);
-  };
-
-  // Build bullets-only with blank line between steps
   const buildSection = (langCode) => {
     let sec = '';
-    const allSteps = [...historyStack, currentStepId];
-    allSteps.forEach((stepId, idx) => {
-      if (SKIP_STEPS.has(stepId)) return;
+    const allSteps = [...historyStack, currentStepId].filter(id => !SKIP_STEPS.has(id));
+    const ansLabel  = langCode === 'it' ? '=> Risposta: ' : '=> Answer: ';
+    const stepLabel = langCode === 'it' ? 'Passaggio' : 'Step';
+    const stepCount = allSteps.length;
+
+    allSteps.forEach((stepId, index) => {
       const step = document.getElementById(stepId);
       if (!step) return;
+
+      const titleEl = step.querySelector('h2');
+      const titleText = titleEl ? getTextFromI18n(titleEl, langCode) : stepId;
+
+      sec += `[ ${stepLabel} ${index + 1}/${stepCount} — ${titleText} ]\n`;
 
       const ch = choiceByStep[stepId];
       const chosen = ch ? (langCode === 'en' ? ch.en : ch.it) : '';
 
-      // Emit lines
       let appendedChoice = false;
       const lines = step.querySelectorAll('p, li');
       lines.forEach(node => {
         let line = getTextFromI18n(node, langCode);
-        if (!line || !shouldKeepLine(stepId, langCode, line)) return;
+        if (!line) return;
         if (!appendedChoice && chosen && node.tagName.toLowerCase() === 'p') {
-          line = `${line} → ${chosen}`;
+          line = `${line} ${ansLabel}${chosen}`;
           appendedChoice = true;
         }
-        sec += `• ${line}\n`;
+        sec += `  • ${line}\n`;
       });
+
       if (chosen && !appendedChoice) {
-        sec += `→ ${chosen}\n`;
+        sec += `  ${ansLabel}${chosen}\n`;
       }
-      // blank line between steps
+
       sec += `\n`;
     });
+
     return sec.trim();
   };
 
   const itSection = buildSection('it');
   const enSection = buildSection('en');
-
-  const finalOutput = `${prefixIt}\n\n${itSection ? itSection + '\n' : ''}\n--------------------------------------\n\n${prefixEn}\n\n${enSection}`;
+  const finalOutput =
+    `${prefixIt}\n\n${itSection}\n\n` +
+    `--------------------------------------\n\n` +
+    `${prefixEn}\n\n${enSection}`;
 
   navigator.clipboard.writeText(finalOutput)
     .then(() => alert(t('copy_success')))
